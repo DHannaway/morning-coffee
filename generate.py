@@ -229,7 +229,7 @@ No Markdown, lists, headings, URLs, or citation numbers in the spoken script.
     try:
         obj = json.loads(raw)
     except json.JSONDecodeError:
-        match = re.search(r"\\{.*\\}", raw, re.DOTALL)
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
         if not match:
             raise ValueError("Script model did not produce JSON")
         obj = json.loads(match.group())
