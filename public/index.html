@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#123b37">
+<title>The Morning Coffee — Your briefing</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#172b27;background:#f5f5ee;font-size:16px}
+*{box-sizing:border-box}body{margin:0}main{max-width:720px;margin:auto;padding:26px 20px 70px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:28px}.brand{font-size:.76rem;letter-spacing:.16em;text-transform:uppercase;color:#52726c;font-weight:750}.cup{font-size:2.1rem}
+h1{font-size:clamp(2.3rem,8vw,4rem);letter-spacing:-.055em;line-height:1.03;margin:.3em 0}.sub{font-size:1.05rem;color:#5c6a66;line-height:1.5;max-width:38rem}
+.player{margin-top:25px;background:#123b37;border-radius:24px;padding:25px;color:white;box-shadow:0 13px 32px #103b3425}
+.overline{color:#bdd7c7;font-size:.77rem;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
+.playheader{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:20px}.playheader h2{font-size:1.55rem;letter-spacing:-.03em;line-height:1.2;margin:7px 0 0}.length{white-space:nowrap;color:#d3e0d7;font-size:.85rem}
+.controls{display:flex;gap:15px;align-items:center}.play{appearance:none;border:0;border-radius:50%;width:68px;height:68px;background:#ecbd8a;color:#1d2a24;display:grid;place-items:center;cursor:pointer;font-size:1.85rem;flex-shrink:0}.play:disabled{opacity:.45;cursor:not-allowed}
+.track{flex:1;min-width:0}.timeline{width:100%;accent-color:#eaba83;cursor:pointer}.times{display:flex;justify-content:space-between;color:#d3e0d7;font-size:.8rem;font-variant-numeric:tabular-nums}
+.actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;color:#d3e0d7;font-size:.8rem;flex-wrap:wrap}.speed{border:1px solid #77968b;border-radius:40px;background:transparent;color:white;padding:8px 12px;cursor:pointer;font-size:.88rem}
+.status{margin-top:14px;font-size:.88rem;color:#536f66}.status.warn{color:#99550f}.topics{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}.topic{background:#e5e9df;padding:10px 13px;border-radius:40px;color:#344f46;font-size:.87rem;font-weight:600}
+hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px solid #dbe0d6;padding:18px 2px}summary{font-size:1.07rem;font-weight:700;cursor:pointer;list-style-position:outside}#script{white-space:pre-wrap;line-height:1.75;color:#374943;margin:18px 0 10px}ul{line-height:1.7;padding-left:22px}a{color:#225a50;overflow-wrap:anywhere}footer{margin-top:30px;color:#63716b;font-size:.79rem;line-height:1.5}
+@media(min-width:600px){main{padding-top:46px}.player{padding:30px}.topics{gap:12px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><div class="brand">The Morning Coffee</div><div class="cup" aria-hidden="true">☕</div></div>
+  <h1 id="date">Your daily briefing.</h1>
+  <p class="sub">The day, in context. Edinburgh weather, the stories that matter, and a little cybersecurity — made for your morning coffee.</p>
+  <section class="player" aria-label="Audio briefing player">
+    <div class="playheader"><div><div class="overline">Today's edition</div><h2>Morning briefing</h2></div><div class="length" id="duration">5–10 mins</div></div>
+    <div class="controls">
+      <button class="play" id="play" disabled aria-label="Play briefing" title="Play or pause">▶</button>
+      <div class="track"><input id="seek" class="timeline" type="range" min="0" max="100" value="0" aria-label="Audio position"><div class="times"><span id="elapsed">0:00</span><span id="remaining">—</span></div></div>
+    </div>
+    <div class="actions"><span>AI-generated narration · Tap play to listen</span><button class="speed" id="speed" title="Change playback speed">1× speed</button></div>
+  </section>
+  <div class="status" id="status" role="status">Checking for the latest briefing…</div>
+  <div class="topics"><span class="topic">☁ Edinburgh weather</span><span class="topic">◉ Big headlines</span><span class="topic">⛨ Cybersecurity</span></div>
+  <hr>
+  <details><summary>Read the transcript</summary><div id="script">No briefing has been published yet.</div></details>
+  <details><summary>Sources and further reading</summary><ul id="sources"><li>Sources appear here after publication.</li></ul></details>
+  <footer>This is a personal AI-generated news summary, not a live broadcast. Details should be checked against the linked sources. Your fixed QR code can always point to this same webpage.</footer>
+  <audio id="audio" preload="metadata"></audio>
+</main>
+<script>
+(async function () {
+  const $ = id => document.getElementById(id);
+  const audio=$('audio'), play=$('play'),seek=$('seek'),status=$('status');
+  const fmt=n => Number.isFinite(n)?`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`:'—';
+  let speeds=[1,1.25,1.5,.85],speedIndex=0;
+  const update=()=>{play.textContent=audio.paused?'▶':'Ⅱ';play.setAttribute('aria-label',audio.paused?'Play briefing':'Pause briefing');
+    $('elapsed').textContent=fmt(audio.currentTime);$('remaining').textContent=fmt(audio.duration);
+    if(Number.isFinite(audio.duration)&&audio.duration>0)seek.value=Math.round(100*audio.currentTime/audio.duration);};
+  play.onclick=()=>{if(audio.paused){audio.play().catch(()=>{status.textContent='Unable to play audio. Try refreshing this page.';});}else audio.pause();};
+  seek.oninput=()=>{if(Number.isFinite(audio.duration)&&audio.duration)audio.currentTime=audio.duration*Number(seek.value)/100;};
+  $('speed').onclick=()=>{speedIndex=(speedIndex+1)%speeds.length;audio.playbackRate=speeds[speedIndex];$('speed').textContent=speeds[speedIndex]+'× speed';};
+  ['timeupdate','loadedmetadata','play','pause','ended'].forEach(evt=>audio.addEventListener(evt,update));
+  try {
+    const r=await fetch('./latest.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok)throw Error('not published');
+    const briefing=await r.json(); if(!briefing.audio || !briefing.date)throw Error('not yet ready');
+    $('date').textContent=briefing.date_label || briefing.date;
+    $('duration').textContent='About '+(briefing.duration_estimate_minutes || 8)+' min';
+    $('script').textContent=briefing.script || 'Transcript unavailable';
+    const ul=$('sources');ul.replaceChildren();
+    for(const source of briefing.sources||[]){ if(!/^https?:\/\//.test(source.url))continue;
+      const li=document.createElement('li'),a=document.createElement('a');a.href=source.url;a.rel='noopener noreferrer';a.target='_blank';a.textContent=source.title||source.url;li.append(a);ul.append(li);}
+    audio.src='./'+briefing.audio+'?date='+encodeURIComponent(briefing.date);
+    play.disabled=false;
+    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    // Format en-CA is not uniform on all Android versions; compare via en-GB date parts.
+    const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+    const get=type=>parts.find(p=>p.type===type)?.value;
+    const localDate=`${get('year')}-${get('month')}-${get('day')}`;
+    if(briefing.date!==localDate){status.textContent='Latest available edition is from '+briefing.date_label+'. Today’s briefing hasn’t been published yet.';status.classList.add('warn');}
+    else{status.textContent='Ready to listen · Published '+new Date(briefing.generated_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})+' UK time';}
+  } catch(e){status.textContent='No briefing published yet. The first recording appears after the publishing workflow runs successfully.';status.classList.add('warn');}
+})();
+</script>
+</body>
+</html>
