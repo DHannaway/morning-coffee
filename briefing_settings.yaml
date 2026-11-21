@@ -1,0 +1,52 @@
+# THE MORNING COFFEE — PERSONAL SETTINGS
+# Edit this file in GitHub. Changes take effect the next time you run
+# "Publish Morning Coffee" (automatically each morning or manually in Actions).
+# There is no need to edit Python for these options.
+# Do not put passwords, API keys, or private information here: this repo is public.
+
+# Target listening time, in minutes (whole number from 5 to 10).
+duration_minutes: 8
+
+# How the briefing should sound and how much explanation it should contain.
+presentation_style: "Warm, intelligent, conversational British radio presenter. Engaging, calm and occasionally witty; never sensationalist."
+explanation_depth: "Explain unfamiliar topics from first principles, with historical context and definitions. Assume a curious, technically capable listener, not subject-matter expertise."
+
+# The voice name and spoken delivery instructions for OpenAI text-to-speech.
+# 'cedar' matches the existing recording. Unsupported voice names will fail
+# at generation, so keep this value unless you have tested an alternative.
+voice: cedar
+voice_direction: "Warm, articulate British presenter; natural conversational pacing, moderate energy, clear pauses, not theatrical."
+
+# Turn sections on/off without changing the code.
+# Optional topics are off by default; set them to true to add their news feeds.
+topics:
+  edinburgh_weather: true
+  uk_news: true
+  scotland_news: true
+  world_news: true
+  ai_and_data_science: true
+  cybersecurity: true
+  technical_concept_of_the_day: true
+  business_and_economics: false
+  science_and_space: false
+
+# Control story count. The script adapts to the chosen overall duration.
+headline_stories: 4
+cybersecurity_stories: 2
+
+# This is the most powerful customisation option. Write instructions in
+# plain English; the generator will incorporate them into the editorial brief.
+editorial_instructions: >-
+  Prioritise material developments over celebrity or sensational news.
+  In cybersecurity and AI, focus especially on how developments affect
+  enterprise organisations, machine learning systems, and data scientists.
+  Explain why each story matters, and distinguish reporting from speculation.
+
+# Optional: add RSS feeds for interests not covered above.
+# A valid entry looks like:
+# extra_rss_feeds:
+#   - name: My specialist news
+#     url: https://example.org/news/rss.xml
+# All added feeds must be HTTPS. Adding a feed does not guarantee it has
+# fresh stories every day. Only article headlines and timestamps are read.
+extra_rss_feeds: []
