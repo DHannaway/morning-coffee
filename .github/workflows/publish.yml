@@ -1,0 +1,45 @@
+name: Publish Morning Coffee
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs at 07:05 UK time, leaving some margin before 07:30 coffee.
+    # GitHub Actions may occasionally start late.
+    - cron: '5 7 * * *'
+      timezone: 'Europe/London'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: morning-coffee-pages
+  cancel-in-progress: false
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Generate narrated briefing
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_SCRIPT_MODEL: gpt-4.1-mini
+          OPENAI_TTS_MODEL: gpt-4o-mini-tts
+          OPENAI_TTS_VOICE: cedar
+        run: python generate.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: Publish site
+        id: deployment
+        uses: actions/deploy-pages@v4
