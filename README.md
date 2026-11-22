@@ -10,7 +10,7 @@ while GitHub Actions generates and publishes a fresh recording daily.
 ## How news now reaches the script
 
 1. Collect recent RSS leads from BBC UK, Scotland, World and Technology,
-   BleepingComputer and SecurityWeek, plus enabled optional feeds. RSS titles,
+   TechCrunch AI, BleepingComputer and SecurityWeek, plus enabled optional feeds. RSS titles,
    summaries and timestamps are **discovery leads only**.
 2. **GPT-5.4 mini** shortlists up to 24 promising leads, preserving a spread of
    Scottish, UK, international, technology and cybersecurity candidates.
