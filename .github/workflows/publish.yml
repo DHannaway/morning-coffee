@@ -1,14 +1,19 @@
 name: Publish Morning Coffee
 on:
   workflow_dispatch:
-  # Allow edits to this workflow to launch a fresh publishing run.
+  # An edit to the workflow runs the freshness check too.
   push:
     paths:
       - '.github/workflows/publish.yml'
   schedule:
-    # Runs at 07:05 UK time, leaving some margin before 07:30 coffee.
-    # GitHub Actions may occasionally start late.
-    - cron: '5 7 * * *'
+    # Multiple staggered UK-local triggers compensate for occasionally
+    # delayed/dropped GitHub scheduled events. Only the first needed run
+    # generates audio; later runs check today's published JSON and skip.
+    - cron: '37,57 6 * * *'
+      timezone: 'Europe/London'
+    - cron: '17,47 7 * * *'
+      timezone: 'Europe/London'
+    - cron: '27 8 * * *'
       timezone: 'Europe/London'
 
 permissions:
@@ -27,15 +32,62 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Check if today's edition is already published
+        id: freshness
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from urllib.request import Request, urlopen
+          from zoneinfo import ZoneInfo
+
+          today = datetime.now(ZoneInfo("Europe/London")).date().isoformat()
+          event = os.environ.get("GITHUB_EVENT_NAME", "")
+          publish = event == "workflow_dispatch"
+          if publish:
+              print("Manual run: explicitly regenerate today's briefing.")
+          else:
+              url = (
+                  "https://dhannaway.github.io/morning-coffee/latest.json"
+                  + "?check=" + str(int(datetime.now(timezone.utc).timestamp()))
+              )
+              try:
+                  req = Request(url, headers={
+                      "Cache-Control": "no-cache",
+                      "User-Agent": "MorningCoffee/1.0",
+                  })
+                  with urlopen(req, timeout=15) as response:
+                      published = json.load(response)
+                  existing_date = published.get("date")
+                  publish = existing_date != today
+                  print(f"Current published date: {existing_date!r}; UK today: {today}.")
+              except Exception as exc:
+                  # A stale/absent page should not prevent publication.
+                  publish = True
+                  print(f"Unable to verify existing edition ({type(exc).__name__}: {exc}). Generating.")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"publish={'true' if publish else 'false'}\n")
+          print("Generate and deploy: " + ("yes" if publish else "no, already current"))
+          PY
+      - name: Already published today — no paid generation needed
+        if: steps.freshness.outputs.publish == 'false'
+        run: echo "Today's edition is live; skipping OpenAI calls and Pages deployment."
       - uses: actions/checkout@v4
+        if: steps.freshness.outputs.publish == 'true'
       - uses: actions/setup-python@v5
+        if: steps.freshness.outputs.publish == 'true'
         with:
           python-version: '3.12'
       - name: Install dependencies
+        if: steps.freshness.outputs.publish == 'true'
         run: pip install -r requirements.txt
       - name: Install FFmpeg
+        if: steps.freshness.outputs.publish == 'true'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Generate narrated briefing
+        if: steps.freshness.outputs.publish == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_SCRIPT_MODEL: gpt-4.1-mini
@@ -43,9 +95,12 @@ jobs:
           OPENAI_TTS_VOICE: cedar
         run: python generate.py
       - uses: actions/configure-pages@v5
+        if: steps.freshness.outputs.publish == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.freshness.outputs.publish == 'true'
         with:
           path: public
       - name: Publish site
+        if: steps.freshness.outputs.publish == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
