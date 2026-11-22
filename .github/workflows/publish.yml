@@ -1,6 +1,10 @@
 name: Publish Morning Coffee
 on:
   workflow_dispatch:
+  # Allow edits to this workflow to launch a fresh publishing run.
+  push:
+    paths:
+      - '.github/workflows/publish.yml'
   schedule:
     # Runs at 07:05 UK time, leaving some margin before 07:30 coffee.
     # GitHub Actions may occasionally start late.
