@@ -37,10 +37,15 @@ cybersecurity_stories: 2
 # This is the most powerful customisation option. Write instructions in
 # plain English; the generator will incorporate them into the editorial brief.
 editorial_instructions: >-
-  Prioritise material developments over celebrity or sensational news.
-  In cybersecurity and AI, focus especially on how developments affect
-  enterprise organisations, machine learning systems, and data scientists.
-  Explain why each story matters, and distinguish reporting from speculation.
+  Prioritise substantive reporting over celebrity, sensational news or
+  vague hot takes. Tell me what actually happened, with concrete facts,
+  decisions, dates, names and useful figures drawn from article reporting.
+  Never fill airtime with generic "this underlines the importance of" prose.
+  Begin with significant Scottish or UK news when available; clearly
+  distinguish Edinburgh/Scottish, wider UK and overseas developments.
+  In cybersecurity and AI, explain the technical mechanism and concrete
+  enterprise or data-science implications, not generic warnings.
+  Distinguish confirmed reporting, allegations and background explanation.
 
 # Optional: add RSS feeds for interests not covered above.
 # A valid entry looks like:
@@ -48,5 +53,5 @@ editorial_instructions: >-
 #   - name: My specialist news
 #     url: https://example.org/news/rss.xml
 # All added feeds must be HTTPS. Adding a feed does not guarantee it has
-# fresh stories every day. Only article headlines and timestamps are read.
+# fresh stories every day. The system shortlists leads and retrieves readable public article text.
 extra_rss_feeds: []
