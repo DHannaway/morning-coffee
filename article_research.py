@@ -89,7 +89,7 @@ def shortlist_articles(client, headlines: list[dict], settings: dict) -> list[di
     # A robust quota for *researching* Scottish / UK articles: the final writer
     # decides whether their *actual content* is pertinent. Group is not geography.
     for group, minimum in (("Scotland", 3), ("UK", 3), ("World", 3),
-                           ("Technology", 3), ("Cybersecurity", 4),
+                           ("Technology", 3), ("AI and data science", 3), ("Cybersecurity", 4),
                            ("Enterprise security", 4)):
         in_queue = sum(h["group"] == group for h in ordered)
         if in_queue < minimum:
