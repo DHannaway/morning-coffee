@@ -44,9 +44,9 @@ jobs:
 
           today = datetime.now(ZoneInfo("Europe/London")).date().isoformat()
           event = os.environ.get("GITHUB_EVENT_NAME", "")
-          publish = event == "workflow_dispatch"
+          publish = event in {"workflow_dispatch", "push"}
           if publish:
-              print("Manual run: explicitly regenerate today's briefing.")
+              print("Manual run or workflow upgrade: regenerate today's briefing.")
           else:
               url = (
                   "https://dhannaway.github.io/morning-coffee/latest.json"
@@ -90,7 +90,8 @@ jobs:
         if: steps.freshness.outputs.publish == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_SCRIPT_MODEL: gpt-4.1-mini
+          OPENAI_RESEARCH_MODEL: gpt-5.4-mini
+          OPENAI_SCRIPT_MODEL: gpt-5.4
           OPENAI_TTS_MODEL: gpt-4o-mini-tts
           OPENAI_TTS_VOICE: cedar
         run: python generate.py
