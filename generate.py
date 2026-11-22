@@ -30,7 +30,10 @@ FEEDS_BY_TOPIC = {
     "uk_news": [("UK", "https://feeds.bbci.co.uk/news/uk/rss.xml")],
     "scotland_news": [("Scotland", "https://feeds.bbci.co.uk/news/scotland/rss.xml")],
     "world_news": [("World", "https://feeds.bbci.co.uk/news/world/rss.xml")],
-    "ai_and_data_science": [("Technology", "https://feeds.bbci.co.uk/news/technology/rss.xml")],
+    "ai_and_data_science": [
+        ("Technology", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
+        ("AI and data science", "https://techcrunch.com/category/artificial-intelligence/feed/"),
+    ],
     "cybersecurity": [
         ("Cybersecurity", "https://www.bleepingcomputer.com/feed/"),
         ("Enterprise security", "https://www.securityweek.com/feed/"),
