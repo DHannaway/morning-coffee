@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -111,11 +112,28 @@ def retrieve_weather() -> dict:
         "daily": "temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max",
         "hourly": "temperature_2m,precipitation_probability,wind_speed_10m",
     }
-    response = requests.get("https://api.open-meteo.com/v1/forecast", params=params, timeout=25)
-    response.raise_for_status()
-    payload = response.json()
-    if not payload.get("daily", {}).get("time"):
-        raise ValueError("Weather API returned no forecast")
+    # Weather is useful, but not critical to publishing a news briefing.
+    # Retry transient Open-Meteo errors (including HTTP 502) before giving up.
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params=params,
+                timeout=(8, 25),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not payload.get("daily", {}).get("time"):
+                raise ValueError("Weather API returned no forecast")
+            break
+        except (requests.RequestException, ValueError) as exc:
+            last_error = exc
+            if attempt == 2:
+                raise RuntimeError("Open-Meteo unavailable after three tries") from last_error
+            delay = 2 ** (attempt + 1)
+            print(f"Weather attempt {attempt + 1} failed: {exc}; retrying in {delay}s", flush=True)
+            time.sleep(delay)
     return {
         "city": "Edinburgh, Scotland",
         "date": payload["daily"]["time"][0],
@@ -214,7 +232,10 @@ Additional editorial preferences: {settings['editorial_instructions']}
 CRITICAL RULES FOR NEWS ACCURACY
 - The articles in the input contain TEXT RETRIEVED FROM THE LINKED WEB PAGES,
   not just headlines. Use those article bodies as the ONLY source of current
-  news facts, alongside the supplied weather forecast. A headline without a
+  news facts, alongside the supplied weather forecast. If weather is null,
+  briefly state the live Edinburgh forecast is unavailable rather than
+  inventing temperatures, rain probabilities, wind or other conditions.
+  A headline without a
   substantive article body is never acceptable evidence.
 - For every story you cover, communicate WHAT actually happened and include
   2-4 concrete, supported details: people/organisations, actions, decisions,
@@ -327,7 +348,13 @@ def main() -> None:
     if not os.environ.get("OPENAI_API_KEY"):
         raise SystemExit("Missing OPENAI_API_KEY. Add it as a GitHub Actions secret.")
     now = datetime.now(TZ)
-    weather = retrieve_weather() if settings["topics"]["edinburgh_weather"] else None
+    weather = None
+    if settings["topics"]["edinburgh_weather"]:
+        try:
+            weather = retrieve_weather()
+        except (requests.RequestException, RuntimeError, ValueError, KeyError, IndexError) as exc:
+            # A weather-service outage must not block fresh, verified news.
+            print(f"WARNING: Weather unavailable ({type(exc).__name__}: {exc}); proceeding without forecast.", flush=True)
     news, warnings = retrieve_headlines(selected_feeds(settings))
     print(f"Retrieved {len(news)} headlines; feed warnings: {warnings}")
     client = OpenAI()
