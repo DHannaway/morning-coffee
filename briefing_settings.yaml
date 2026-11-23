@@ -28,10 +28,10 @@ topics:
   cybersecurity: true
   technical_concept_of_the_day: true
   business_and_economics: false
-  science_and_space: false
+  science_and_space: true
 
 # Control story count. The script adapts to the chosen overall duration.
-headline_stories: 4
+headline_stories: 7
 cybersecurity_stories: 2
 
 # This is the most powerful customisation option. Write instructions in
