@@ -46,9 +46,12 @@ jobs:
 
           today = datetime.now(ZoneInfo("Europe/London")).date().isoformat()
           event = os.environ.get("GITHUB_EVENT_NAME", "")
-          publish = event in {"workflow_dispatch", "push"}
+          # Manual Run workflow explicitly forces a new recording.
+          # Scheduled AND trigger-file push runs must check the live date,
+          # otherwise overlapping backup attempts would incur duplicate charges.
+          publish = event == "workflow_dispatch"
           if publish:
-              print("Manual run or workflow upgrade: regenerate today's briefing.")
+              print("Manual dispatch: explicitly regenerate today's briefing.")
           else:
               url = (
                   "https://dhannaway.github.io/morning-coffee/latest.json"
