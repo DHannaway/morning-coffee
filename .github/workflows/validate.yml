@@ -1,0 +1,27 @@
+name: Validate Morning Coffee
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'generate.py'
+      - 'article_research.py'
+      - 'briefing_settings.yaml'
+      - '.github/workflows/validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Python syntax
+        run: python -m py_compile generate.py article_research.py
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Validate briefing settings without OpenAI calls
+        run: python generate.py --check-settings
