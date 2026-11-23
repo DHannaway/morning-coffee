@@ -5,11 +5,11 @@
 # Do not put passwords, API keys, or private information here: this repo is public.
 
 # Target listening time, in minutes (whole number from 5 to 10).
-duration_minutes: 8
+duration_minutes: 10
 
 # How the briefing should sound and how much explanation it should contain.
 presentation_style: "Warm, intelligent, conversational British radio presenter. Engaging, calm and occasionally witty; never sensationalist."
-explanation_depth: "Explain unfamiliar topics from first principles, with historical context and definitions. Assume a curious, technically capable listener, not subject-matter expertise."
+explanation_depth: "Breadth before depth: define unfamiliar concepts briefly and supply essential context, but summarise each article rather than narrating a deep dive. Assume a curious, technically capable listener."
 
 # The voice name and spoken delivery instructions for OpenAI text-to-speech.
 # 'cedar' matches the existing recording. Unsupported voice names will fail
@@ -43,8 +43,15 @@ editorial_instructions: >-
   Never fill airtime with generic "this underlines the importance of" prose.
   Begin with significant Scottish or UK news when available; clearly
   distinguish Edinburgh/Scottish, wider UK and overseas developments.
-  In cybersecurity and AI, explain the technical mechanism and concrete
-  enterprise or data-science implications, not generic warnings.
+  In cybersecurity and AI, explain the key mechanism and one concrete
+  enterprise or data-science implication, not a long technical lesson.
+  Preserve the existing range and number of worthwhile stories: prioritise
+  breadth over depth, with 2-4 specific verified details per article.
+  For each major story, answer what happened, the essential context and
+  the practical significance in a compact summary; do not retell the whole
+  article. Use smooth transitions and a clear overall narrative, but keep
+  the introduction, background detours and conclusion brief. Leave further
+  detail to the linked sources that can be read later.
   Distinguish confirmed reporting, allegations and background explanation.
 
 # Optional: add RSS feeds for interests not covered above.
