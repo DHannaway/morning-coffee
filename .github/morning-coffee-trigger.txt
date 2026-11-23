@@ -1,5 +1,4 @@
-# Trigger file for independent Morning Coffee scheduler.
-# The daily backup automation updates this only if the live site is stale.
+# Independent daily trigger for the Morning Coffee QR-code website.
+# A workflow run checks live freshness before incurring API costs.
 last_requested_date: 2026-11-23
-last_requested_at: 2026-11-23T08:15:35.898Z
-reason: Recover missed Monday edition after weather API retry fix.
+last_requested_at: 2026-11-23T08:18:25.351Z
