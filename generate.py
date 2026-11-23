@@ -204,7 +204,8 @@ def build_script(client: OpenAI, now: datetime, weather: dict | None,
     """Write from retrieved reporting, not from speculative headline expansion."""
     date_text = f"{now:%A} {now.day} {now:%B %Y}"
     minutes = settings["duration_minutes"]
-    target_words = minutes * 130
+    target_words = minutes * 150
+    max_words = minutes * 158  # Strict ceiling: don't let prose sprawl beyond ~10 minutes.
     topics = settings["topics"]
     prompt = {
         "local_date": date_text,
@@ -219,9 +220,14 @@ def build_script(client: OpenAI, now: datetime, weather: dict | None,
     rules = f"""You are an exacting British radio news editor producing an informative,
 pleasant-to-listen-to morning bulletin for a person living in EDINBURGH, SCOTLAND.
 Return ONLY valid JSON with fields {{"script":"...", "source_ids":[1,3]}}.
-Aim for {target_words} spoken words (around {minutes} minutes), but prioritise
-substantive reporting over length: if the verified evidence cannot sustain that
-length, WRITE A SHORTER SCRIPT. NEVER pad the script to hit a word target.
+Target approximately {target_words} spoken words, and NEVER exceed {max_words}
+spoken words under any circumstances. This is a real {minutes}-minute audio
+briefing, NOT a long-form podcast. Word limit applies to narration only.
+If the verified evidence cannot sustain the target, WRITE A SHORTER SCRIPT.
+Never pad to hit a word target. Preserve a broad selection of substantive
+stories; summarise each article rather than retelling it. Give the specific
+new development, two or three useful verified details, a sentence of context
+if needed, and one concrete consequence or relevance, then move on.
 Start with the correct local weekday and date. British English, conversational,
 authoritative and natural when read out loud.
 
@@ -253,9 +259,15 @@ CRITICAL RULES FOR NEWS ACCURACY
   substantive supporting reporting; then major international developments,
   followed by the most worthwhile cyber/AI items. Do not manufacture a Scottish
   story from a foreign news event.
-- Prefer a few fully explained stories to many titles. Spend little time on
-  introductions or sign-offs. Context should add verifiable background or
-  explain the mechanism of events; never masquerade as fresh reported facts.
+- Breadth over depth. Aim to cover the requested number of major news
+  stories and cybersecurity items, if sufficiently evidenced; never pad or
+  invent stories merely to hit a quota. Prioritise important developments
+  across Scotland, the UK, the world and AI over extended commentary.
+- Give each story a concise broadcast summary, not a full article recital.
+  Keep weather, introduction, transitions and sign-off short. Background
+  should be a sentence or two at most, unless essential to understand the
+  report. Avoid lengthy history lessons and repeated conclusions.
+  Context is not new reporting; distinguish the two explicitly.
 - One SHORT, specific implication per major story is enough; do not repeatedly
   say why developments "matter" without naming a concrete consequence.
 - Strictly avoid empty stock phrases like "this underlines the importance of",
@@ -277,10 +289,52 @@ CRITICAL RULES FOR NEWS ACCURACY
         input=json.dumps(prompt, ensure_ascii=False),
     )
     obj = parse_model_json(answer.output_text)
+    # Models sometimes overshoot spoken-word guidance, so enforce it in code.
+    # If the first draft is too long, request a tighter EDIT (not new research).
+    # Keep the same source IDs and stories; only condense their narration.
+    source_ids = obj.get("source_ids", [])
+    for revision in range(2):
+        draft = obj.get("script", "")
+        if not isinstance(draft, str):
+            raise ValueError("Script model returned invalid script field")
+        if len(draft.split()) <= max_words:
+            break
+        print(
+            f"Draft has {len(draft.split())} words; requesting concise revision "
+            f"(maximum {max_words}).",
+            flush=True,
+        )
+        shortened = client.responses.create(
+            model=os.environ.get("OPENAI_SCRIPT_MODEL", "gpt-5.4"),
+            instructions=(
+                "You are tightening an already-researched British spoken-news script. "
+                "Return ONLY valid JSON with one field: {\"script\":\"...\"}. "
+                f"Write approximately {target_words - 60} spoken words and "
+                f"STRICTLY NEVER MORE THAN {max_words} words. "
+                "Preserve ALL distinct news stories and their verified facts, "
+                "source attributions, meaningful UK/Scotland relevance, and the "
+                "technical concept if present. Remove padded background, "
+                "repetition, rhetorical flourishes and long introductions. "
+                "Keep two or three concrete verified details per story. "
+                "Do not invent or add ANY new facts, numbers, dates or citations. "
+                "Plain spoken prose only, no headings, Markdown or URLs."
+            ),
+            input=json.dumps(
+                {"draft": draft, "source_ids_to_preserve": source_ids},
+                ensure_ascii=False,
+            ),
+        )
+        revision_data = parse_model_json(shortened.output_text)
+        obj["script"] = revision_data.get("script", "")
     script = obj.get("script", "")
     if not isinstance(script, str):
         raise ValueError("Script model returned invalid script field")
     script = script.strip()
+    if len(script.split()) > max_words:
+        raise ValueError(
+            f"Briefing exceeded the {minutes}-minute limit after editing: "
+            f"{len(script.split())} words (maximum {max_words})"
+        )
     if len(script.split()) < max(300, int(target_words * 0.45)):
         raise ValueError(f"Insufficient supported news for a full briefing: {len(script.split())} words")
     if re.search(r"\bcloser to home\b", script, flags=re.I):
@@ -364,13 +418,22 @@ def main() -> None:
     PUBLIC.mkdir(exist_ok=True)
     mp3 = PUBLIC / "latest.mp3"
     render_audio(client, script, mp3, settings)
+    # The recorded MP3 can run longer/shorter than a word-count estimate.
+    # Measure actual playback duration so the website and logs reflect reality.
+    audio_duration_seconds = float(subprocess.check_output(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(mp3)],
+        text=True,
+    ).strip())
+    print(f"Audio duration: {audio_duration_seconds / 60:.2f} minutes", flush=True)
     metadata = {
         "date": now.date().isoformat(),
         "date_label": f"{now:%A} {now.day} {now:%B %Y}",
         "generated_at": now.isoformat(),
         "word_count": len(script.split()),
         "research": research_stats,
-        "duration_estimate_minutes": round(len(script.split()) / 140),
+        "duration_estimate_minutes": round(audio_duration_seconds / 60, 1),
+        "audio_duration_seconds": round(audio_duration_seconds),
         "audio": "latest.mp3",
         "script": script,
         "sources": [
