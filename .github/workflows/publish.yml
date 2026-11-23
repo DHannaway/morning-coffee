@@ -1,10 +1,12 @@
 name: Publish Morning Coffee
 on:
   workflow_dispatch:
-  # A workflow edit explicitly regenerates using the latest source code.
+  # Workflow edits and independent daily-trigger updates launch a fresh run.
+  # This remains available even if GitHub misses a cron schedule event.
   push:
     paths:
       - '.github/workflows/publish.yml'
+      - '.github/morning-coffee-trigger.txt'
   schedule:
     # Multiple staggered UK-local triggers compensate for occasionally
     # delayed/dropped GitHub scheduled events. Only the first needed run
