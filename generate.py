@@ -201,52 +201,76 @@ def retrieve_headlines(feeds: list[tuple[str, str]]) -> tuple[list[dict], list[s
 
 
 def weather_opening(weather: dict | None) -> str:
-    """Create a short, factual Edinburgh forecast independently of the LLM.
+    """Deliver a practical Edinburgh forecast, separately from the news LLM.
 
-    Weather is a required spoken section. If the data provider is down,
-    explicitly say so rather than silently omit the section or guess.
+    Use only verified Open-Meteo values; no invented sunshine or conditions.
+    If the provider is unavailable, say so and still publish the news.
     """
     if weather is None:
         return (
-            "First, Edinburgh's weather. The live forecast is unavailable "
-            "this morning, so I won't guess at temperatures or rain."
+            "First, a look at Edinburgh's weather. The live forecast is unavailable "
+            "this morning, so I won't guess at temperatures or rain. "
+            "Check a local forecast before heading out."
         )
 
-    daily = weather.get("daily", {})
-    details = []
+    daily = weather.get("daily") or {}
     low, high = daily.get("temperature_2m_min"), daily.get("temperature_2m_max")
-    if isinstance(low, (int, float)) and isinstance(high, (int, float)):
-        details.append(
-            f"temperatures from around {round(low)} to {round(high)} degrees Celsius"
-        )
-
     rain = daily.get("precipitation_probability_max")
-    if isinstance(rain, (int, float)):
-        details.append(f"a maximum rain probability of {round(rain)} percent")
-
+    rainfall = daily.get("precipitation_sum")
     wind = daily.get("wind_speed_10m_max")
-    if isinstance(wind, (int, float)):
+    is_number = lambda value: isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    details = []
+    if is_number(low) and is_number(high):
+        details.append(f"temperatures from around {round(low)} to {round(high)} degrees Celsius")
+    if is_number(rain):
+        details.append(f"a maximum rain probability of {round(rain)} percent")
+    if is_number(rainfall) and rainfall >= 0.5:
+        details.append(f"around {rainfall:.1f} millimetres of precipitation in total")
+    if is_number(wind):
         details.append(f"winds reaching about {round(wind)} kilometres per hour")
 
     if not details:
-        return "First, Edinburgh's weather. The latest forecast is incomplete, so I won't guess at the conditions."
+        return (
+            "First, Edinburgh's weather. The latest forecast is incomplete; "
+            "please check locally for today's conditions."
+        )
 
     opening = "First, Edinburgh's weather today: " + "; ".join(details) + "."
-    hourly = weather.get("hourly", [])
-    rainy_hours = [
-        record for record in hourly
-        if isinstance(record.get("rain_probability_pct"), (int, float))
+    hourly = weather.get("hourly") or []
+    valid_hours = [
+        row for row in hourly
+        if isinstance(row, dict)
+        and is_number(row.get("rain_probability_pct"))
+        and isinstance(row.get("time"), str)
+        and len(row["time"]) >= 16
     ]
-    if rainy_hours and isinstance(rain, (int, float)) and rain >= 40:
-        wettest = max(rainy_hours, key=lambda record: record["rain_probability_pct"])
-        hour = wettest.get("time", "")[11:16]
-        if len(hour) == 5:
-            opening += f" The highest hourly rain chance is around {hour}."
-    if isinstance(rain, (int, float)):
-        if rain >= 55:
-            opening += " A waterproof layer would be sensible."
-        elif rain <= 20:
-            opening += " It looks relatively dry."
+    if valid_hours:
+        peak = max(valid_hours, key=lambda row: row["rain_probability_pct"])
+        if peak["rain_probability_pct"] >= 40:
+            hour = peak["time"][11:16]
+            if hour[:2].isdigit():
+                clock_hour = int(hour[:2])
+                period = ("morning" if clock_hour < 12 else
+                          "afternoon" if clock_hour < 18 else "evening")
+                opening += (
+                    f" The highest hourly rain chance is around {hour} "
+                    f"in the {period}, at {round(peak['rain_probability_pct'])} percent."
+                )
+
+    advice = []
+    if is_number(rain) and rain >= 55:
+        advice.append("Take a waterproof layer if you're heading out")
+    elif is_number(rain) and 30 <= rain < 55:
+        advice.append("A light waterproof layer could be useful")
+    if is_number(low) and low <= 3:
+        advice.append("Wrap up warmly, especially early on")
+    if is_number(wind) and wind >= 40:
+        advice.append("Expect blustery conditions in exposed places")
+    if advice:
+        opening += " Practical takeaway: " + "; ".join(advice[:2]) + "."
+    elif is_number(rain) and rain <= 20:
+        opening += " It looks relatively dry, so outdoor plans may be easier today."
     return opening
 
 
@@ -305,6 +329,12 @@ def build_script(client: OpenAI, now: datetime, weather: dict | None,
         "enabled_topics": [name.replace("_", " ") for name, enabled in topics.items() if enabled],
         "general_news_story_target": settings["headline_stories"],
         "cybersecurity_story_target": settings["cybersecurity_stories"] if topics["cybersecurity"] else 0,
+        "total_news_story_target": (
+            settings["headline_stories"] +
+            (settings["cybersecurity_stories"] if topics["cybersecurity"] else 0)
+        ),
+        "editorial_priority": "UK-wide news first; elevate substantive AI/data-science developments",
+        "technical_concept_max_words": 125,
     }
     rules = f"""You are an exacting British radio news editor producing an informative,
 pleasant-to-listen-to morning bulletin for a person living in EDINBURGH, SCOTLAND.
@@ -317,10 +347,16 @@ Do not repeat the greeting, weekday, date or weather in your text.
 Start with the most important verified news story, in natural British English.
 The news narration is NOT a long-form podcast. Word limits are strict.
 If the verified evidence cannot sustain the target, WRITE A SHORTER SCRIPT.
-Never pad to hit a word target. Preserve a broad selection of substantive
-stories; summarise each article rather than retelling it. Give the specific
-new development, two or three useful verified details, a sentence of context
-if needed, and one concrete consequence or relevance, then move on.
+Never pad to hit a word target. Cover approximately eight DISTINCT worthwhile
+news stories TOTAL, INCLUDING the two cybersecurity stories (target 7-9 total).
+Preserve story breadth rather than using time for an extended essay.
+Prefer impactful UK-wide developments, retaining major Scottish/world news.
+Give AI and data-science reporting greater prominence: aim for one or two
+substantial AI stories when the verified evidence supports them, not filler.
+For most stories, summarise the specific development, two or three concrete
+verified details and one consequence in roughly 90-130 words.
+Only the most consequential or technically complex stories should receive a
+little additional background. Do not retell any article at full length.
 Use British English, conversational, authoritative and natural when read
 out loud. Keep a concise transition from the weather into the first story.
 
@@ -346,18 +382,21 @@ CRITICAL RULES FOR NEWS ACCURACY
   "Scottish" means Scotland; "UK" means the UK; South Korea is INTERNATIONAL.
   Never use the phrase "closer to home" at all. State geographical transitions
   clearly, particularly when moving to world news.
-- Aim for a meaningful Scottish or wider UK item near the start if there is
-  substantive supporting reporting; then major international developments,
-  followed by the most worthwhile cyber/AI items. Do not manufacture a Scottish
-  story from a foreign news event.
+- UK news has editorial priority. Begin with a substantive UK or Scottish item
+  when available; aim for approximately three UK-relevant items within the
+  eight-story mix if the reporting supports them. Keep consequential global
+  events, but don't force an equal country split. AI/data-science should
+  feature prominently when credible coverage exists. Geography must be correct.
+  Do not manufacture local relevance from a foreign event.
 - Breadth over depth. Aim to cover the requested number of major news
   stories and cybersecurity items, if sufficiently evidenced; never pad or
   invent stories merely to hit a quota. Prioritise important developments
   across Scotland, the UK, the world and AI over extended commentary.
 - Give each story a concise broadcast summary, not a full article recital.
-  Keep weather, introduction, transitions and sign-off short. Background
-  should be a sentence or two at most, unless essential to understand the
-  report. Avoid lengthy history lessons and repeated conclusions.
+  Weather is already handled before your narration. Keep transitions and
+  the sign-off short. Give more context only to the most consequential items.
+  Write for a single listener in a relaxed, natural, conversational voice,
+  not a formal essay. Avoid lengthy history lessons and repeated conclusions.
   Context is not new reporting; distinguish the two explicitly.
 - One SHORT, specific implication per major story is enough; do not repeatedly
   say why developments "matter" without naming a concrete consequence.
@@ -365,8 +404,10 @@ CRITICAL RULES FOR NEWS ACCURACY
   "a stark reminder of", "only time will tell", "this highlights the need for",
   "a development worth keeping an eye on", "raises important questions about",
   "the broader implications of", and "it remains to be seen".
-- If enabled, include a technical concept only when it connects usefully to
-  a reported cyber/AI story; define technical terms from first principles.
+- If enabled, include one useful technical concept only when it connects
+  directly to verified cyber/AI reporting. Explain the fundamentals, a concrete
+  example, and why it matters in no more than 125 words (at most one minute).
+  This time is INCLUDED in the ten-minute briefing, not additional to it.
 - Do not read out source URLs, IDs, headlines as a list, Markdown, or section
   headings. Attribute reporting naturally to the named publication.
 - Choose source_ids ONLY from supplied article IDs actually discussed in the
