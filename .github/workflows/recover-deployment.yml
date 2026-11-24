@@ -1,5 +1,9 @@
 name: Recover Morning Coffee Deployment
 on:
+  # If the publisher fails after making an artifact, recover it automatically.
+  workflow_run:
+    workflows: ['Publish Morning Coffee']
+    types: [completed]
   workflow_dispatch:
     inputs:
       source_run_id:
@@ -23,6 +27,7 @@ concurrency:
 
 jobs:
   recover:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -33,12 +38,13 @@ jobs:
         id: source
         env:
           REQUESTED_RUN_ID: ${{ inputs.source_run_id }}
+          FAILED_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           python3 - <<'PY'
           import os
           import re
           from pathlib import Path
-          run_id = os.environ.get("REQUESTED_RUN_ID", "").strip()
+          run_id = os.environ.get("FAILED_RUN_ID", "").strip() or os.environ.get("REQUESTED_RUN_ID", "").strip()
           if not run_id:
               marker = Path(".github/morning-coffee-recovery.txt").read_text()
               match = re.search(r"^source_run_id:\s*(\d+)\s*$", marker, re.M)
