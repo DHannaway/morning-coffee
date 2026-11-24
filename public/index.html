@@ -16,7 +16,9 @@ h1{font-size:clamp(2.3rem,8vw,4rem);letter-spacing:-.055em;line-height:1.03;marg
 .controls{display:flex;gap:15px;align-items:center}.play{appearance:none;border:0;border-radius:50%;width:68px;height:68px;background:#ecbd8a;color:#1d2a24;display:grid;place-items:center;cursor:pointer;font-size:1.85rem;flex-shrink:0}.play:disabled{opacity:.45;cursor:not-allowed}
 .track{flex:1;min-width:0}.timeline{width:100%;accent-color:#eaba83;cursor:pointer}.times{display:flex;justify-content:space-between;color:#d3e0d7;font-size:.8rem;font-variant-numeric:tabular-nums}
 .actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;color:#d3e0d7;font-size:.8rem;flex-wrap:wrap}.speed{border:1px solid #77968b;border-radius:40px;background:transparent;color:white;padding:8px 12px;cursor:pointer;font-size:.88rem}
-.status{margin-top:14px;font-size:.88rem;color:#536f66}.status.warn{color:#99550f}.topics{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}.topic{background:#e5e9df;padding:10px 13px;border-radius:40px;color:#344f46;font-size:.87rem;font-weight:600}
+.status{margin-top:14px;font-size:.91rem;line-height:1.55;color:#536f66}.status.warn{color:#99550f}.status.ready{color:#256c50}.status.error{color:#8d3333}
+.status-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:10px;font-size:.85rem}.status-actions button{background:#e6ece5;border:1px solid #bed0c4;color:#205448;border-radius:22px;padding:8px 13px;cursor:pointer;font:inherit;font-weight:650}.status-actions button:disabled{opacity:.65;cursor:wait}
+.status-actions a{color:#225a50}.topics{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}.topic{background:#e5e9df;padding:10px 13px;border-radius:40px;color:#344f46;font-size:.87rem;font-weight:600}
 hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px solid #dbe0d6;padding:18px 2px}summary{font-size:1.07rem;font-weight:700;cursor:pointer;list-style-position:outside}#script{white-space:pre-wrap;line-height:1.75;color:#374943;margin:18px 0 10px}ul{line-height:1.7;padding-left:22px}a{color:#225a50;overflow-wrap:anywhere}footer{margin-top:30px;color:#63716b;font-size:.79rem;line-height:1.5}
 @media(min-width:600px){main{padding-top:46px}.player{padding:30px}.topics{gap:12px}}
 </style>
@@ -27,14 +29,18 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
   <h1 id="date">Your daily briefing.</h1>
   <p class="sub">The day, in context. Edinburgh weather, the stories that matter, and a little cybersecurity — made for your morning coffee.</p>
   <section class="player" aria-label="Audio briefing player">
-    <div class="playheader"><div><div class="overline">Today's edition</div><h2>Morning briefing</h2></div><div class="length" id="duration">5–10 mins</div></div>
+    <div class="playheader"><div><div class="overline" id="edition-kind">Latest available edition</div><h2>Morning briefing</h2></div><div class="length" id="duration">5–10 mins</div></div>
     <div class="controls">
       <button class="play" id="play" disabled aria-label="Play briefing" title="Play or pause">▶</button>
       <div class="track"><input id="seek" class="timeline" type="range" min="0" max="100" value="0" aria-label="Audio position"><div class="times"><span id="elapsed">0:00</span><span id="remaining">—</span></div></div>
     </div>
     <div class="actions"><span>AI-generated narration · Tap play to listen</span><button class="speed" id="speed" title="Change playback speed">1× speed</button></div>
   </section>
-  <div class="status" id="status" role="status">Checking for the latest briefing…</div>
+  <div class="status" id="status" role="status" aria-live="polite">Checking the published edition…</div>
+  <div class="status-actions">
+    <button id="refresh" type="button" aria-label="Check whether a newer Morning Coffee briefing is online">Check for today's edition</button>
+    <a href="https://github.com/DHannaway/morning-coffee/actions/workflows/publish.yml" target="_blank" rel="noopener noreferrer">View publishing status on GitHub</a>
+  </div>
   <div class="topics"><span class="topic">☁ Edinburgh weather</span><span class="topic">◉ Big headlines</span><span class="topic">⛨ Cybersecurity</span></div>
   <hr>
   <details><summary>Read the transcript</summary><div id="script">No briefing has been published yet.</div></details>
@@ -43,37 +49,123 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
   <audio id="audio" preload="metadata"></audio>
 </main>
 <script>
-(async function () {
+(function () {
   const $ = id => document.getElementById(id);
-  const audio=$('audio'), play=$('play'),seek=$('seek'),status=$('status');
-  const fmt=n => Number.isFinite(n)?`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`:'—';
-  let speeds=[1,1.25,1.5,.85],speedIndex=0;
-  const update=()=>{play.textContent=audio.paused?'▶':'Ⅱ';play.setAttribute('aria-label',audio.paused?'Play briefing':'Pause briefing');
-    $('elapsed').textContent=fmt(audio.currentTime);$('remaining').textContent=fmt(audio.duration);
-    if(Number.isFinite(audio.duration)&&audio.duration>0)seek.value=Math.round(100*audio.currentTime/audio.duration);};
-  play.onclick=()=>{if(audio.paused){audio.play().catch(()=>{status.textContent='Unable to play audio. Try refreshing this page.';});}else audio.pause();};
-  seek.oninput=()=>{if(Number.isFinite(audio.duration)&&audio.duration)audio.currentTime=audio.duration*Number(seek.value)/100;};
-  $('speed').onclick=()=>{speedIndex=(speedIndex+1)%speeds.length;audio.playbackRate=speeds[speedIndex];$('speed').textContent=speeds[speedIndex]+'× speed';};
-  ['timeupdate','loadedmetadata','play','pause','ended'].forEach(evt=>audio.addEventListener(evt,update));
-  try {
-    const r=await fetch('./latest.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok)throw Error('not published');
-    const briefing=await r.json(); if(!briefing.audio || !briefing.date)throw Error('not yet ready');
-    $('date').textContent=briefing.date_label || briefing.date;
-    $('duration').textContent='About '+(briefing.duration_estimate_minutes || 8)+' min';
-    $('script').textContent=briefing.script || 'Transcript unavailable';
-    const ul=$('sources');ul.replaceChildren();
-    for(const source of briefing.sources||[]){ if(!/^https?:\/\//.test(source.url))continue;
-      const li=document.createElement('li'),a=document.createElement('a');a.href=source.url;a.rel='noopener noreferrer';a.target='_blank';a.textContent=source.title||source.url;li.append(a);ul.append(li);}
-    audio.src='./'+briefing.audio+'?version='+encodeURIComponent(briefing.generated_at || briefing.date);
-    play.disabled=false;
-    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-    // Format en-CA is not uniform on all Android versions; compare via en-GB date parts.
-    const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const audio=$('audio'), play=$('play'), seek=$('seek'), status=$('status');
+  const refresh=$('refresh'), editionKind=$('edition-kind');
+  const fmt=n=>Number.isFinite(n)?`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`:'—';
+  const speeds=[1,1.25,1.5,.85];
+  let speedIndex=0;
+  let loadedVersion='';
+  let hasEdition=false;
+  function showStatus(message, kind='') {
+    status.textContent=message;
+    status.className='status'+(kind?' '+kind:'');
+  }
+  function ukParts() {
+    const parts=new Intl.DateTimeFormat('en-GB',{
+      timeZone:'Europe/London',year:'numeric',month:'2-digit',
+      day:'2-digit',hour:'2-digit',hourCycle:'h23'
+    }).formatToParts(new Date());
     const get=type=>parts.find(p=>p.type===type)?.value;
-    const localDate=`${get('year')}-${get('month')}-${get('day')}`;
-    if(briefing.date!==localDate){status.textContent='Latest available edition is from '+briefing.date_label+'. Today’s briefing hasn’t been published yet.';status.classList.add('warn');}
-    else{status.textContent='Ready to listen · Published '+new Date(briefing.generated_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})+' UK time';}
-  } catch(e){status.textContent='No briefing published yet. The first recording appears after the publishing workflow runs successfully.';status.classList.add('warn');}
+    return {date:`${get('year')}-${get('month')}-${get('day')}`,
+            hour:Number(get('hour'))};
+  }
+  function updatePlayer() {
+    play.textContent=audio.paused?'▶':'Ⅱ';
+    play.setAttribute('aria-label',audio.paused?'Play briefing':'Pause briefing');
+    $('elapsed').textContent=fmt(audio.currentTime);
+    $('remaining').textContent=fmt(audio.duration);
+    if(Number.isFinite(audio.duration)&&audio.duration>0) {
+      seek.value=Math.round(100*audio.currentTime/audio.duration);
+    }
+  }
+  play.onclick=()=> {
+    if(audio.paused) audio.play().catch(()=>showStatus(
+      'Unable to play the recording. Please check your connection or reload the page.','error'));
+    else audio.pause();
+  };
+  seek.oninput=()=> {
+    if(Number.isFinite(audio.duration)&&audio.duration>0)
+      audio.currentTime=audio.duration*Number(seek.value)/100;
+  };
+  $('speed').onclick=()=> {
+    speedIndex=(speedIndex+1)%speeds.length;
+    audio.playbackRate=speeds[speedIndex];
+    $('speed').textContent=speeds[speedIndex]+'× speed';
+  };
+  ['timeupdate','loadedmetadata','play','pause','ended'].forEach(event=>
+    audio.addEventListener(event,updatePlayer));
+
+  async function checkForEdition() {
+    refresh.disabled=true;
+    refresh.textContent='Checking…';
+    showStatus('Checking the latest published recording…');
+    try {
+      const response=await fetch('./latest.json?check='+Date.now(),{cache:'no-store'});
+      if(!response.ok) throw Error('Briefing metadata is not available');
+      const briefing=await response.json();
+      if(!briefing.date || !briefing.audio) throw Error('No valid edition metadata');
+
+      const version=String(briefing.generated_at||briefing.date);
+      $('date').textContent=briefing.date_label||briefing.date;
+      $('duration').textContent='About '+(briefing.duration_estimate_minutes||10)+' min';
+      $('script').textContent=briefing.script||'Transcript unavailable';
+      const links=$('sources');
+      links.replaceChildren();
+      for(const source of briefing.sources||[]) {
+        if(!source||typeof source.url!=='string'||!/^https?:\/\//.test(source.url))continue;
+        const li=document.createElement('li');
+        const link=document.createElement('a');
+        link.href=source.url;
+        link.target='_blank';
+        link.rel='noopener noreferrer';
+        link.textContent=source.title||source.url;
+        li.append(link);
+        links.append(li);
+      }
+
+      // Don't interrupt ongoing playback if nothing new has appeared.
+      if(version!==loadedVersion) {
+        audio.src='./'+briefing.audio+'?version='+encodeURIComponent(version);
+        loadedVersion=version;
+      }
+      play.disabled=false;
+      hasEdition=true;
+      const uk=ukParts();
+      if(briefing.date===uk.date) {
+        editionKind.textContent="Today's edition";
+        const published=briefing.generated_at
+          ?new Date(briefing.generated_at).toLocaleTimeString('en-GB',{
+             timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'})
+          :null;
+        showStatus("Today's edition is available"+(published
+          ?' · Generated at '+published+' UK time'
+          :'')+'.','ready');
+      } else {
+        editionKind.textContent='Previous edition · today not yet available';
+        const label=briefing.date_label||briefing.date;
+        if(uk.hour<7) {
+          showStatus("Today's briefing is not published yet. Target: before 07:00 UK time. "+
+            "You can listen to the previous edition ("+label+") while checking again.",'warn');
+        } else {
+          showStatus("Today's briefing is overdue. The latest available recording is "+
+            label+". Automated recovery may be needed; check again or view GitHub "+
+            "publishing status. This previous edition is still playable.",'error');
+        }
+      }
+    } catch(error) {
+      editionKind.textContent=hasEdition?'Last loaded edition':'No edition available';
+      showStatus('Unable to check the latest edition right now. Check your connection and '+
+        'try again. '+(hasEdition?'The previously loaded recording is still available.':
+        'You can check the GitHub publishing status for more information.'),'error');
+    } finally {
+      refresh.disabled=false;
+      refresh.textContent="Check for today's edition";
+    }
+  }
+  refresh.addEventListener('click',checkForEdition);
+  checkForEdition();
 })();
 </script>
 </body>
