@@ -250,6 +250,36 @@ def weather_opening(weather: dict | None) -> str:
     return opening
 
 
+def keep_script_within_limit(script: str, ceiling: int) -> str:
+    """Last-resort safety net if an LLM repeatedly misses the word ceiling.
+
+    Preserve the opening sentence of each paragraph/story-sized group and
+    remove trailing elaboration across the longer groups, not whole stories.
+    This runs only after several model attempts to edit the draft.
+    """
+    if len(script.split()) <= ceiling:
+        return script
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", script.strip()) if part.strip()]
+    if len(paragraphs) < 3:
+        # Some models return one huge paragraph. Preserve breadth by slicing
+        # it into short sentence groups before trimming.
+        sentences = re.split(r"(?<=[.!?])\s+", script.strip())
+        paragraphs = [" ".join(sentences[i:i + 4]) for i in range(0, len(sentences), 4)]
+    groups = [re.split(r"(?<=[.!?])\s+", paragraph) for paragraph in paragraphs]
+    def count() -> int:
+        return sum(len(" ".join(group).split()) for group in groups)
+    while count() > ceiling:
+        eligible = [(len(" ".join(group).split()), i) for i, group in enumerate(groups)
+                    if len(group) > 1]
+        if not eligible:
+            raise ValueError("Unable to shorten script without losing entire stories")
+        _, index = max(eligible)
+        groups[index].pop()  # Drop extra detail, not the main story sentence.
+    shortened = "\n\n".join(" ".join(group) for group in groups)
+    print(f"Deterministic final trim: {len(shortened.split())} words", flush=True)
+    return shortened
+
+
 def build_script(client: OpenAI, now: datetime, weather: dict | None,
                  news: list[dict], settings: dict) -> tuple[str, list[dict]]:
     """Write from retrieved reporting, not from speculative headline expansion."""
@@ -354,8 +384,11 @@ CRITICAL RULES FOR NEWS ACCURACY
     # If the first draft is too long, request a tighter EDIT (not new research).
     # Keep the same source IDs and stories; only condense their narration.
     source_ids = obj.get("source_ids", [])
-    for revision in range(2):
+    best_draft = obj.get("script", "")
+    for revision in range(5):
         draft = obj.get("script", "")
+        if isinstance(draft, str) and len(draft.split()) < len(best_draft.split()):
+            best_draft = draft
         if not isinstance(draft, str):
             raise ValueError("Script model returned invalid script field")
         if len(draft.split()) <= news_cap:
@@ -365,13 +398,16 @@ CRITICAL RULES FOR NEWS ACCURACY
             f"(maximum {news_cap}).",
             flush=True,
         )
+        desired = max(850, news_cap - 230 - revision * 135)
         shortened = client.responses.create(
             model=os.environ.get("OPENAI_SCRIPT_MODEL", "gpt-5.4"),
             instructions=(
                 "You are tightening an already-researched British spoken-news script. "
                 "Return ONLY valid JSON with one field: {\"script\":\"...\"}. "
-                f"Write approximately {max(300, news_target - 60)} spoken words and "
-                f"STRICTLY NEVER MORE THAN {news_cap} words. "
+                f"The draft is {len(draft.split())} words. Cut it to approximately "
+                f"{desired} words (at least {max(0, len(draft.split()) - desired)} "
+                f"fewer words), and STRICTLY NEVER MORE THAN {news_cap}. "
+                "Count the words before returning the JSON. "
                 "Preserve ALL distinct news stories and their verified facts, "
                 "source attributions, meaningful UK/Scotland relevance, and the "
                 "technical concept if present. Remove padded background, "
@@ -390,7 +426,10 @@ CRITICAL RULES FOR NEWS ACCURACY
     script = obj.get("script", "")
     if not isinstance(script, str):
         raise ValueError("Script model returned invalid script field")
-    script = opening + "\n\n" + script.strip()
+    if len(best_draft.split()) < len(script.split()):
+        script = best_draft
+    script = keep_script_within_limit(script.strip(), news_cap)
+    script = opening + "\n\n" + script
     if len(script.split()) > max_words:
         raise ValueError(
             f"Briefing exceeded the {minutes}-minute limit after editing: "
