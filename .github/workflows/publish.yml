@@ -7,14 +7,15 @@ on:
     paths:
       - '.github/morning-coffee-trigger.txt'
   schedule:
-    # Multiple staggered UK-local triggers compensate for occasionally
-    # delayed/dropped GitHub scheduled events. Only the first needed run
-    # generates audio; later runs check today's published JSON and skip.
-    - cron: '37,57 6 * * *'
+    # Early UK-local slots support the 07:00 publishing target.
+    # The 05:45 ChatGPT watchdog is an independent trigger; GitHub cron
+    # provides extra chances if a scheduled or push run is dropped.
+    # Later jobs check the live edition and skip duplicate OpenAI calls.
+    - cron: '52 5 * * *'
       timezone: 'Europe/London'
-    - cron: '17,47 7 * * *'
+    - cron: '12,32,52 6 * * *'
       timezone: 'Europe/London'
-    - cron: '27 8 * * *'
+    - cron: '12 7 * * *'
       timezone: 'Europe/London'
 
 permissions:
