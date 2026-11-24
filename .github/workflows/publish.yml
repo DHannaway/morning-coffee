@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deploy1.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
     steps:
       - name: Check if today's edition is already published
         id: freshness
@@ -88,9 +88,14 @@ jobs:
       - name: Install dependencies
         if: steps.freshness.outputs.publish == 'true'
         run: pip install -r requirements.txt
-      - name: Install FFmpeg
+      - name: Check FFmpeg (install only if missing)
         if: steps.freshness.outputs.publish == 'true'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
       - name: Generate narrated briefing
         if: steps.freshness.outputs.publish == 'true'
         env:
@@ -106,7 +111,58 @@ jobs:
         if: steps.freshness.outputs.publish == 'true'
         with:
           path: public
-      - name: Publish site
+      # GitHub sometimes reports no Pages artifact immediately after an
+      # upload succeeds: give its artifact API time to become consistent.
+      - name: Wait for uploaded Pages artifact to be indexed
         if: steps.freshness.outputs.publish == 'true'
-        id: deployment
+        run: sleep 45
+      - name: Publish site (attempt 1)
+        if: steps.freshness.outputs.publish == 'true'
+        id: deploy1
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait before deployment retry
+        if: steps.freshness.outputs.publish == 'true' && steps.deploy1.outcome != 'success'
+        run: sleep 45
+      - name: Publish site (attempt 2)
+        if: steps.freshness.outputs.publish == 'true' && steps.deploy1.outcome != 'success'
+        id: deploy2
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait before final deployment retry
+        if: steps.freshness.outputs.publish == 'true' && steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
+        run: sleep 60
+      - name: Publish site (attempt 3)
+        if: steps.freshness.outputs.publish == 'true' && steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
+        id: deploy3
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Fail if no Pages deployment succeeded
+        if: steps.freshness.outputs.publish == 'true' && steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success' && steps.deploy3.outcome != 'success'
+        run: exit 1
+      - name: Verify today's edition is live
+        if: steps.freshness.outputs.publish == 'true' && (steps.deploy1.outcome == 'success' || steps.deploy2.outcome == 'success' || steps.deploy3.outcome == 'success')
+        run: |
+          python3 - <<'PY'
+          import json
+          import time
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+          from urllib.request import Request, urlopen
+
+          today = datetime.now(ZoneInfo("Europe/London")).date().isoformat()
+          for attempt in range(12):
+              url = "https://dhannaway.github.io/morning-coffee/latest.json?verify=" + str(time.time_ns())
+              try:
+                  with urlopen(Request(url, headers={"Cache-Control":"no-cache"}), timeout=15) as resp:
+                      live = json.load(resp)
+                  if live.get("date") == today:
+                      print("Verified live Morning Coffee edition:", today)
+                      break
+                  print("Still showing", live.get("date"), "on attempt", attempt + 1)
+              except Exception as exc:
+                  print("Verification attempt failed:", type(exc).__name__, str(exc))
+              time.sleep(10)
+          else:
+              raise SystemExit("Deployment did not produce a verified current edition")
+          PY
