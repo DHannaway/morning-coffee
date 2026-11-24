@@ -1,11 +1,10 @@
 name: Publish Morning Coffee
 on:
   workflow_dispatch:
-  # Workflow edits and independent daily-trigger updates launch a fresh run.
-  # This remains available even if GitHub misses a cron schedule event.
+  # Independent publishing trigger, separate from GitHub's cron scheduler.
+  # Workflow source changes are validated independently, not paid news runs.
   push:
     paths:
-      - '.github/workflows/publish.yml'
       - '.github/morning-coffee-trigger.txt'
   schedule:
     # Multiple staggered UK-local triggers compensate for occasionally
