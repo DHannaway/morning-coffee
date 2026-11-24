@@ -34,7 +34,26 @@ jobs:
       url: ${{ steps.deploy1.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check for a recoverable uploaded artifact
+        id: source_artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const id = context.payload.workflow_run.id;
+            const {data} = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: id,
+              per_page: 100
+            });
+            const available = data.artifacts.some(a => a.name === 'github-pages' && !a.expired);
+            core.setOutput('available', available ? 'true' : 'false');
+            core.info(available
+              ? 'Found an existing Pages artifact; deploy it without regenerating audio.'
+              : 'No Pages artifact exists; skip recovery and leave regeneration to freshness watchdog.');
       - name: Determine source run ID
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
         id: source
         env:
           REQUESTED_RUN_ID: ${{ inputs.source_run_id }}
@@ -58,6 +77,7 @@ jobs:
           print("Recovering workflow artifact from run", run_id)
           PY
       - name: Retrieve already-generated Pages artifact
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
         uses: actions/download-artifact@v4
         with:
           name: github-pages
@@ -65,6 +85,7 @@ jobs:
           github-token: ${{ github.token }}
           path: recovered-artifact
       - name: Rebuild deployment directory without OpenAI calls
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
         run: |
           mkdir -p public
           tar -xf recovered-artifact/artifact.tar -C public
@@ -72,33 +93,38 @@ jobs:
           test -s public/latest.json
           python3 -c 'import json; from datetime import datetime; from zoneinfo import ZoneInfo; p=json.load(open("public/latest.json")); today=datetime.now(ZoneInfo("Europe/London")).date().isoformat(); print("Recovering edition:",p.get("date"),"-",p.get("word_count"),"words"); assert p.get("date")==today, "Cannot recover an edition from a different day"'
       - name: Apply newest web player to recovered recording
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
         run: git show HEAD:public/index.html > public/index.html
       - uses: actions/configure-pages@v5
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
         with:
           path: public
       - name: Allow GitHub artifact API to index uploaded artifact
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
         run: sleep 40
       - name: Deploy recovered recording (attempt 1)
+        if: github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true'
         id: deploy1
         uses: actions/deploy-pages@v4
         continue-on-error: true
       - name: Pause before retry
-        if: steps.deploy1.outcome != 'success'
+        if: (github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true') && steps.deploy1.outcome != 'success'
         run: sleep 45
       - name: Deploy recovered recording (attempt 2)
         id: deploy2
-        if: steps.deploy1.outcome != 'success'
+        if: (github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true') && steps.deploy1.outcome != 'success'
         uses: actions/deploy-pages@v4
         continue-on-error: true
       - name: Pause before final retry
-        if: steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
+        if: (github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true') && steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
         run: sleep 60
       - name: Deploy recovered recording (attempt 3)
         id: deploy3
-        if: steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
+        if: (github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true') && steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
         uses: actions/deploy-pages@v4
         continue-on-error: true
       - name: Fail if all deployment attempts failed
-        if: steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success' && steps.deploy3.outcome != 'success'
+        if: (github.event_name != 'workflow_run' || steps.source_artifact.outputs.available == 'true') && steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success' && steps.deploy3.outcome != 'success'
         run: exit 1
