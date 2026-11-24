@@ -23,5 +23,27 @@ jobs:
         run: python -m py_compile generate.py article_research.py
       - name: Install dependencies
         run: pip install -r requirements.txt
+      - name: Test guaranteed weather narration
+        run: |
+          python - <<'PY'
+          from generate import weather_opening
+          example = {
+              "daily": {
+                  "temperature_2m_min": 2,
+                  "temperature_2m_max": 8,
+                  "precipitation_probability_max": 70,
+                  "wind_speed_10m_max": 30,
+              },
+              "hourly": [{"time": "2026-11-24T12:00", "rain_probability_pct": 70}],
+          }
+          spoken = weather_opening(example)
+          assert "Edinburgh" in spoken
+          assert "2 to 8 degrees Celsius" in spoken
+          assert "70 percent" in spoken
+          assert "30 kilometres per hour" in spoken
+          assert "12:00" in spoken
+          assert "unavailable" in weather_opening(None)
+          print("Weather intro works with live data and unavailable fallback.")
+          PY
       - name: Validate briefing settings without OpenAI calls
         run: python generate.py --check-settings
