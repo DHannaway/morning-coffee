@@ -6,6 +6,9 @@ on:
       - 'generate.py'
       - 'article_research.py'
       - 'briefing_settings.yaml'
+      - 'public/index.html'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/recover-deployment.yml'
       - '.github/workflows/validate.yml'
 
 permissions:
@@ -43,7 +46,30 @@ jobs:
           assert "30 kilometres per hour" in spoken
           assert "12:00" in spoken
           assert "unavailable" in weather_opening(None)
-          print("Weather intro works with live data and unavailable fallback.")
+          assert "waterproof" in spoken.lower()
+          assert "Practical takeaway" in spoken
+          from generate import load_settings
+          settings=load_settings()
+          assert settings["duration_minutes"] == 10
+          assert settings["headline_stories"] == 6
+          assert settings["cybersecurity_stories"] == 2
+          assert settings["topics"]["edinburgh_weather"]
+          print("Weather, practical advice, eight-story targets and ten-minute limit validated.")
           PY
+      - name: Check website UI and JavaScript syntax
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          html=Path("public/index.html").read_text()
+          for required in ('id="status"','id="refresh"','id="edition-kind"',
+                           '07:00 UK time', 'Today\'s briefing is overdue',
+                           'Check for today\'s edition'):
+              assert required in html, f"Missing UI text: {required}"
+          script=re.search(r"<script>(.*?)</script>",html,re.S)
+          assert script, "Inline website JavaScript missing"
+          Path("/tmp/morning-coffee-player.js").write_text(script.group(1))
+          PY
+          node --check /tmp/morning-coffee-player.js
       - name: Validate briefing settings without OpenAI calls
         run: python generate.py --check-settings
