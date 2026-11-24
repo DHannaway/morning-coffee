@@ -64,7 +64,7 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
     const ul=$('sources');ul.replaceChildren();
     for(const source of briefing.sources||[]){ if(!/^https?:\/\//.test(source.url))continue;
       const li=document.createElement('li'),a=document.createElement('a');a.href=source.url;a.rel='noopener noreferrer';a.target='_blank';a.textContent=source.title||source.url;li.append(a);ul.append(li);}
-    audio.src='./'+briefing.audio+'?date='+encodeURIComponent(briefing.date);
+    audio.src='./'+briefing.audio+'?version='+encodeURIComponent(briefing.generated_at || briefing.date);
     play.disabled=false;
     const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
     // Format en-CA is not uniform on all Android versions; compare via en-GB date parts.
