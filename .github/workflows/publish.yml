@@ -35,6 +35,8 @@ jobs:
     steps:
       - name: Check if today's edition is already published
         id: freshness
+        env:
+          REQUEST_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           python3 - <<'PY'
           import json
@@ -45,12 +47,13 @@ jobs:
 
           today = datetime.now(ZoneInfo("Europe/London")).date().isoformat()
           event = os.environ.get("GITHUB_EVENT_NAME", "")
-          # Manual Run workflow explicitly forces a new recording.
-          # Scheduled AND trigger-file push runs must check the live date,
-          # otherwise overlapping backup attempts would incur duplicate charges.
-          publish = event == "workflow_dispatch"
+          # Manual dispatch or an explicitly labelled push can force a
+          # corrected edition; ordinary schedule and watchdog pushes remain
+          # idempotent, to avoid unnecessary repeat OpenAI charges.
+          force = event == "push" and "FORCE_REPUBLISH_MORNING_COFFEE" in os.environ.get("REQUEST_MESSAGE", "")
+          publish = event == "workflow_dispatch" or force
           if publish:
-              print("Manual dispatch: explicitly regenerate today's briefing.")
+              print("Explicit regeneration requested (manual dispatch or force-republish).")
           else:
               url = (
                   "https://dhannaway.github.io/morning-coffee/latest.json"
