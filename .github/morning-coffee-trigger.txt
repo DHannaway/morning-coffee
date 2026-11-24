@@ -1,4 +1,4 @@
 # Independent daily publishing request
 last_requested_date: 2026-11-24
-last_requested_at: 2026-11-24T08:22:46.335Z
+last_requested_at: 2026-11-24T08:23:27.579Z
 reason: Add mandatory Edinburgh weather opening
