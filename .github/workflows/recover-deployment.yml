@@ -71,6 +71,8 @@ jobs:
           test -s public/latest.mp3
           test -s public/latest.json
           python3 -c 'import json; from datetime import datetime; from zoneinfo import ZoneInfo; p=json.load(open("public/latest.json")); today=datetime.now(ZoneInfo("Europe/London")).date().isoformat(); print("Recovering edition:",p.get("date"),"-",p.get("word_count"),"words"); assert p.get("date")==today, "Cannot recover an edition from a different day"'
+      - name: Apply newest web player to recovered recording
+        run: git show HEAD:public/index.html > public/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
