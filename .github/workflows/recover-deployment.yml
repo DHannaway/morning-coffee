@@ -1,0 +1,73 @@
+name: Recover Morning Coffee Deployment
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Failed publishing workflow run containing a successful github-pages artifact'
+        required: true
+        type: string
+  # This first commit also launches recovery of the Tuesday 24 November edition.
+  push:
+    paths:
+      - '.github/workflows/recover-deployment.yml'
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: morning-coffee-pages
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy1.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
+    steps:
+      - name: Retrieve already-generated Pages artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          run-id: ${{ inputs.source_run_id || '45344190978' }}
+          github-token: ${{ github.token }}
+          path: recovered-artifact
+      - name: Rebuild deployment directory without OpenAI calls
+        run: |
+          mkdir -p public
+          tar -xf recovered-artifact/artifact.tar -C public
+          test -s public/latest.mp3
+          test -s public/latest.json
+          python3 -c 'import json; p=json.load(open("public/latest.json")); print("Recovering edition:",p.get("date"),"-",p.get("word_count"),"words"); assert p.get("date")=="2026-11-24" if "${{ github.event_name }}"=="push" else bool(p.get("date"))'
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: Allow GitHub artifact API to index uploaded artifact
+        run: sleep 40
+      - name: Deploy recovered recording (attempt 1)
+        id: deploy1
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Pause before retry
+        if: steps.deploy1.outcome != 'success'
+        run: sleep 45
+      - name: Deploy recovered recording (attempt 2)
+        id: deploy2
+        if: steps.deploy1.outcome != 'success'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Pause before final retry
+        if: steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
+        run: sleep 60
+      - name: Deploy recovered recording (attempt 3)
+        id: deploy3
+        if: steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Fail if all deployment attempts failed
+        if: steps.deploy1.outcome != 'success' && steps.deploy2.outcome != 'success' && steps.deploy3.outcome != 'success'
+        run: exit 1
