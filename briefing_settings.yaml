@@ -8,14 +8,14 @@
 duration_minutes: 10
 
 # How the briefing should sound and how much explanation it should contain.
-presentation_style: "Warm, intelligent, conversational British radio presenter. Engaging, calm and occasionally witty; never sensationalist."
-explanation_depth: "Breadth before depth: define unfamiliar concepts briefly and supply essential context, but summarise each article rather than narrating a deep dive. Assume a curious, technically capable listener."
+presentation_style: "Friendly, natural and conversational British radio presenter talking to one person. Clear, engaging and occasionally witty, without banter, hype or dramatic editorialising."
+explanation_depth: "Prioritise breadth: summarise each reported story with key verified facts, adding background only for the most consequential or difficult stories. Define unfamiliar concepts succinctly for a technically capable listener."
 
 # The voice name and spoken delivery instructions for OpenAI text-to-speech.
 # 'cedar' matches the existing recording. Unsupported voice names will fail
 # at generation, so keep this value unless you have tested an alternative.
 voice: cedar
-voice_direction: "Warm, articulate British presenter; natural conversational pacing, moderate energy, clear pauses, not theatrical."
+voice_direction: "Warm, personable, natural British conversational delivery, as if talking to one attentive listener; moderate pace and clear pauses; never theatrical or overexcited."
 
 # Turn sections on/off without changing the code.
 # Optional topics are off by default; set them to true to add their news feeds.
@@ -31,28 +31,29 @@ topics:
   science_and_space: true
 
 # Control story count. The script adapts to the chosen overall duration.
-headline_stories: 7
+headline_stories: 6
 cybersecurity_stories: 2
 
 # This is the most powerful customisation option. Write instructions in
 # plain English; the generator will incorporate them into the editorial brief.
 editorial_instructions: >-
-  Prioritise substantive reporting over celebrity, sensational news or
-  vague hot takes. Tell me what actually happened, with concrete facts,
-  decisions, dates, names and useful figures drawn from article reporting.
-  Never fill airtime with generic "this underlines the importance of" prose.
-  Begin with significant Scottish or UK news when available; clearly
-  distinguish Edinburgh/Scottish, wider UK and overseas developments.
-  In cybersecurity and AI, explain the key mechanism and one concrete
-  enterprise or data-science implication, not a long technical lesson.
-  Preserve the existing range and number of worthwhile stories: prioritise
-  breadth over depth, with 2-4 specific verified details per article.
-  For each major story, answer what happened, the essential context and
-  the practical significance in a compact summary; do not retell the whole
-  article. Use smooth transitions and a clear overall narrative, but keep
-  the introduction, background detours and conclusion brief. Leave further
-  detail to the linked sources that can be read later.
-  Distinguish confirmed reporting, allegations and background explanation.
+  Plan approximately eight distinct substantive stories in total: six
+  general-interest and two cybersecurity, when supported by full articles.
+  Prefer UK-wide developments over purely international ones, while keeping
+  important Scottish, global and scientific news in the mix. Make AI and
+  data science a prominent recurring thread, ideally two strong stories
+  when the evidence warrants it; never invent or pad weak stories.
+  Preserve 2-4 concrete verified facts per story and working links to
+  the underlying reporting. For most stories give a crisp summary and
+  specific consequence in about 90-130 spoken words. Reserve an extra
+  sentence or two of background for truly important or complicated stories,
+  not every item. Use a coherent narrative and brief natural transitions.
+  Keep the delivery friendly and conversational, not a formal essay.
+  Include a useful cyber/AI technical concept only when tied to actual
+  reporting, and explain it from first principles in no more than one
+  minute, within the ten-minute total. No generic warnings or padded
+  conclusions. Never sacrifice accuracy or Edinburgh's mandatory
+  practical weather forecast to meet the word count.
 
 # Optional: add RSS feeds for interests not covered above.
 # A valid entry looks like:
