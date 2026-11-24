@@ -6,10 +6,10 @@ on:
         description: 'Failed publishing workflow run containing a successful github-pages artifact'
         required: true
         type: string
-  # This first commit also launches recovery of the Tuesday 24 November edition.
+  # An independent watchdog can request recovery without regenerating audio.
   push:
     paths:
-      - '.github/workflows/recover-deployment.yml'
+      - '.github/morning-coffee-recovery.txt'
 
 permissions:
   contents: read
@@ -28,11 +28,34 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy1.outputs.page_url || steps.deploy2.outputs.page_url || steps.deploy3.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Determine source run ID
+        id: source
+        env:
+          REQUESTED_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          run_id = os.environ.get("REQUESTED_RUN_ID", "").strip()
+          if not run_id:
+              marker = Path(".github/morning-coffee-recovery.txt").read_text()
+              match = re.search(r"^source_run_id:\s*(\d+)\s*$", marker, re.M)
+              if not match:
+                  raise SystemExit("Recovery marker is missing source_run_id")
+              run_id = match.group(1)
+          if not re.fullmatch(r"\d+", run_id):
+              raise SystemExit("Invalid source run ID")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("run_id=" + run_id + "\n")
+          print("Recovering workflow artifact from run", run_id)
+          PY
       - name: Retrieve already-generated Pages artifact
         uses: actions/download-artifact@v4
         with:
           name: github-pages
-          run-id: ${{ inputs.source_run_id || '45344190978' }}
+          run-id: ${{ steps.source.outputs.run_id }}
           github-token: ${{ github.token }}
           path: recovered-artifact
       - name: Rebuild deployment directory without OpenAI calls
@@ -41,7 +64,7 @@ jobs:
           tar -xf recovered-artifact/artifact.tar -C public
           test -s public/latest.mp3
           test -s public/latest.json
-          python3 -c 'import json; p=json.load(open("public/latest.json")); print("Recovering edition:",p.get("date"),"-",p.get("word_count"),"words"); assert p.get("date")=="2026-11-24" if "${{ github.event_name }}"=="push" else bool(p.get("date"))'
+          python3 -c 'import json; from datetime import datetime; from zoneinfo import ZoneInfo; p=json.load(open("public/latest.json")); today=datetime.now(ZoneInfo("Europe/London")).date().isoformat(); print("Recovering edition:",p.get("date"),"-",p.get("word_count"),"words"); assert p.get("date")==today, "Cannot recover an edition from a different day"'
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
