@@ -199,6 +199,57 @@ def retrieve_headlines(feeds: list[tuple[str, str]]) -> tuple[list[dict], list[s
     return records, failures
 
 
+
+def weather_opening(weather: dict | None) -> str:
+    """Create a short, factual Edinburgh forecast independently of the LLM.
+
+    Weather is a required spoken section. If the data provider is down,
+    explicitly say so rather than silently omit the section or guess.
+    """
+    if weather is None:
+        return (
+            "First, Edinburgh's weather. The live forecast is unavailable "
+            "this morning, so I won't guess at temperatures or rain."
+        )
+
+    daily = weather.get("daily", {})
+    details = []
+    low, high = daily.get("temperature_2m_min"), daily.get("temperature_2m_max")
+    if isinstance(low, (int, float)) and isinstance(high, (int, float)):
+        details.append(
+            f"temperatures from around {round(low)} to {round(high)} degrees Celsius"
+        )
+
+    rain = daily.get("precipitation_probability_max")
+    if isinstance(rain, (int, float)):
+        details.append(f"a maximum rain probability of {round(rain)} percent")
+
+    wind = daily.get("wind_speed_10m_max")
+    if isinstance(wind, (int, float)):
+        details.append(f"winds reaching about {round(wind)} kilometres per hour")
+
+    if not details:
+        return "First, Edinburgh's weather. The latest forecast is incomplete, so I won't guess at the conditions."
+
+    opening = "First, Edinburgh's weather today: " + "; ".join(details) + "."
+    hourly = weather.get("hourly", [])
+    rainy_hours = [
+        record for record in hourly
+        if isinstance(record.get("rain_probability_pct"), (int, float))
+    ]
+    if rainy_hours and isinstance(rain, (int, float)) and rain >= 40:
+        wettest = max(rainy_hours, key=lambda record: record["rain_probability_pct"])
+        hour = wettest.get("time", "")[11:16]
+        if len(hour) == 5:
+            opening += f" The highest hourly rain chance is around {hour}."
+    if isinstance(rain, (int, float)):
+        if rain >= 55:
+            opening += " A waterproof layer would be sensible."
+        elif rain <= 20:
+            opening += " It looks relatively dry."
+    return opening
+
+
 def build_script(client: OpenAI, now: datetime, weather: dict | None,
                  news: list[dict], settings: dict) -> tuple[str, list[dict]]:
     """Write from retrieved reporting, not from speculative headline expansion."""
@@ -206,6 +257,14 @@ def build_script(client: OpenAI, now: datetime, weather: dict | None,
     minutes = settings["duration_minutes"]
     target_words = minutes * 150
     max_words = minutes * 158  # Strict ceiling: don't let prose sprawl beyond ~10 minutes.
+    # Weather is assembled as a guaranteed opening, not entrusted to the
+    # news-writing model, which previously omitted it despite the prompt.
+    opening = (
+        f"Good morning. It's {date_text}, and welcome to your Morning Coffee. "
+        + weather_opening(weather)
+    )
+    news_target = target_words - len(opening.split())
+    news_cap = max_words - len(opening.split())
     topics = settings["topics"]
     prompt = {
         "local_date": date_text,
@@ -220,16 +279,20 @@ def build_script(client: OpenAI, now: datetime, weather: dict | None,
     rules = f"""You are an exacting British radio news editor producing an informative,
 pleasant-to-listen-to morning bulletin for a person living in EDINBURGH, SCOTLAND.
 Return ONLY valid JSON with fields {{"script":"...", "source_ids":[1,3]}}.
-Target approximately {target_words} spoken words, and NEVER exceed {max_words}
-spoken words under any circumstances. This is a real {minutes}-minute audio
-briefing, NOT a long-form podcast. Word limit applies to narration only.
+The greeting and local weather update are supplied separately, outside your
+script. Write approximately {news_target} spoken words of NEWS only, and NEVER
+exceed {news_cap} words. The total finished audio, including the weather
+opening, must fit into {minutes} minutes.
+Do not repeat the greeting, weekday, date or weather in your text.
+Start with the most important verified news story, in natural British English.
+The news narration is NOT a long-form podcast. Word limits are strict.
 If the verified evidence cannot sustain the target, WRITE A SHORTER SCRIPT.
 Never pad to hit a word target. Preserve a broad selection of substantive
 stories; summarise each article rather than retelling it. Give the specific
 new development, two or three useful verified details, a sentence of context
 if needed, and one concrete consequence or relevance, then move on.
-Start with the correct local weekday and date. British English, conversational,
-authoritative and natural when read out loud.
+Use British English, conversational, authoritative and natural when read
+out loud. Keep a concise transition from the weather into the first story.
 
 Presentation style: {settings['presentation_style']}
 Explanation depth: {settings['explanation_depth']}
@@ -238,11 +301,9 @@ Additional editorial preferences: {settings['editorial_instructions']}
 CRITICAL RULES FOR NEWS ACCURACY
 - The articles in the input contain TEXT RETRIEVED FROM THE LINKED WEB PAGES,
   not just headlines. Use those article bodies as the ONLY source of current
-  news facts, alongside the supplied weather forecast. If weather is null,
-  briefly state the live Edinburgh forecast is unavailable rather than
-  inventing temperatures, rain probabilities, wind or other conditions.
-  A headline without a
-  substantive article body is never acceptable evidence.
+  news facts. The WEATHER SECTION IS ALREADY WRITTEN, before your script:
+  DO NOT create, repeat or reinterpret any weather facts in the news segment.
+  A headline without a substantive article body is never acceptable evidence.
 - For every story you cover, communicate WHAT actually happened and include
   2-4 concrete, supported details: people/organisations, actions, decisions,
   numbers, dates, location, what is known and what remains uncertain, where
@@ -297,11 +358,11 @@ CRITICAL RULES FOR NEWS ACCURACY
         draft = obj.get("script", "")
         if not isinstance(draft, str):
             raise ValueError("Script model returned invalid script field")
-        if len(draft.split()) <= max_words:
+        if len(draft.split()) <= news_cap:
             break
         print(
             f"Draft has {len(draft.split())} words; requesting concise revision "
-            f"(maximum {max_words}).",
+            f"(maximum {news_cap}).",
             flush=True,
         )
         shortened = client.responses.create(
@@ -309,8 +370,8 @@ CRITICAL RULES FOR NEWS ACCURACY
             instructions=(
                 "You are tightening an already-researched British spoken-news script. "
                 "Return ONLY valid JSON with one field: {\"script\":\"...\"}. "
-                f"Write approximately {target_words - 60} spoken words and "
-                f"STRICTLY NEVER MORE THAN {max_words} words. "
+                f"Write approximately {max(300, news_target - 60)} spoken words and "
+                f"STRICTLY NEVER MORE THAN {news_cap} words. "
                 "Preserve ALL distinct news stories and their verified facts, "
                 "source attributions, meaningful UK/Scotland relevance, and the "
                 "technical concept if present. Remove padded background, "
@@ -329,7 +390,7 @@ CRITICAL RULES FOR NEWS ACCURACY
     script = obj.get("script", "")
     if not isinstance(script, str):
         raise ValueError("Script model returned invalid script field")
-    script = script.strip()
+    script = opening + "\n\n" + script.strip()
     if len(script.split()) > max_words:
         raise ValueError(
             f"Briefing exceeded the {minutes}-minute limit after editing: "
