@@ -13,8 +13,8 @@ h1{font-size:clamp(2.3rem,8vw,4rem);letter-spacing:-.055em;line-height:1.03;marg
 .player{margin-top:25px;background:#123b37;border-radius:24px;padding:25px;color:white;box-shadow:0 13px 32px #103b3425}
 .overline{color:#bdd7c7;font-size:.77rem;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
 .playheader{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:20px}.playheader h2{font-size:1.55rem;letter-spacing:-.03em;line-height:1.2;margin:7px 0 0}.length{white-space:nowrap;color:#d3e0d7;font-size:.85rem}
-.controls{display:flex;gap:15px;align-items:center}.play{appearance:none;border:0;border-radius:50%;width:68px;height:68px;background:#ecbd8a;color:#1d2a24;display:grid;place-items:center;cursor:pointer;font-size:1.85rem;flex-shrink:0}.play:disabled{opacity:.45;cursor:not-allowed}
-.track{flex:1;min-width:0}.timeline{width:100%;accent-color:#eaba83;cursor:pointer}.times{display:flex;justify-content:space-between;color:#d3e0d7;font-size:.8rem;font-variant-numeric:tabular-nums}
+.controls{display:flex;flex-direction:column;gap:15px;align-items:stretch}.play{appearance:none;border:0;border-radius:50%;width:68px;height:68px;background:#ecbd8a;color:#1d2a24;display:grid;place-items:center;cursor:pointer;font-size:1.85rem;flex-shrink:0}.play:disabled{opacity:.45;cursor:not-allowed}
+.transport{display:flex;align-items:center;justify-content:center;gap:18px}.skip{appearance:none;display:grid;place-items:center;min-width:52px;height:48px;border:1px solid #77968b;border-radius:24px;background:transparent;color:white;font:inherit;font-weight:650;cursor:pointer;white-space:nowrap}.skip:disabled{opacity:.45;cursor:not-allowed}.skip:focus-visible,.play:focus-visible{outline:2px solid #ecbd8a;outline-offset:3px}.track{flex:1;min-width:0}.timeline{width:100%;accent-color:#eaba83;cursor:pointer}.times{display:flex;justify-content:space-between;color:#d3e0d7;font-size:.8rem;font-variant-numeric:tabular-nums}
 .actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px;color:#d3e0d7;font-size:.8rem;flex-wrap:wrap}.speed{border:1px solid #77968b;border-radius:40px;background:transparent;color:white;padding:8px 12px;cursor:pointer;font-size:.88rem}
 .status{margin-top:14px;font-size:.91rem;line-height:1.55;color:#536f66}.status.warn{color:#99550f}.status.ready{color:#256c50}.status.error{color:#8d3333}
 .status-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:10px;font-size:.85rem}.status-actions button{background:#e6ece5;border:1px solid #bed0c4;color:#205448;border-radius:22px;padding:8px 13px;cursor:pointer;font:inherit;font-weight:650}.status-actions button:disabled{opacity:.65;cursor:wait}
@@ -31,7 +31,11 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
   <section class="player" aria-label="Audio briefing player">
     <div class="playheader"><div><div class="overline" id="edition-kind">Latest available edition</div><h2>Morning briefing</h2></div><div class="length" id="duration">5–10 mins</div></div>
     <div class="controls">
-      <button class="play" id="play" disabled aria-label="Play briefing" title="Play or pause">▶</button>
+      <div class="transport">
+        <button type="button" class="skip" id="back5" disabled aria-label="Skip back 5 seconds" title="Skip back 5 seconds">−5s</button>
+        <button type="button" class="play" id="play" disabled aria-label="Play briefing" title="Play or pause">▶</button>
+        <button type="button" class="skip" id="forward5" disabled aria-label="Skip forward 5 seconds" title="Skip forward 5 seconds">+5s</button>
+      </div>
       <div class="track"><input id="seek" class="timeline" type="range" min="0" max="100" value="0" aria-label="Audio position"><div class="times"><span id="elapsed">0:00</span><span id="remaining">—</span></div></div>
     </div>
     <div class="actions"><span>AI-generated narration · Tap play to listen</span><button class="speed" id="speed" title="Change playback speed">1× speed</button></div>
@@ -53,6 +57,7 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
   const $ = id => document.getElementById(id);
   const audio=$('audio'), play=$('play'), seek=$('seek'), status=$('status');
   const refresh=$('refresh'), editionKind=$('edition-kind');
+  const back5=$('back5'), forward5=$('forward5');
   const fmt=n=>Number.isFinite(n)?`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`:'—';
   const speeds=[1,1.25,1.5,.85];
   let speedIndex=0;
@@ -76,8 +81,12 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
     play.setAttribute('aria-label',audio.paused?'Play briefing':'Pause briefing');
     $('elapsed').textContent=fmt(audio.currentTime);
     $('remaining').textContent=fmt(audio.duration);
-    if(Number.isFinite(audio.duration)&&audio.duration>0) {
+    const canSeek=Number.isFinite(audio.duration)&&audio.duration>0;
+    back5.disabled=forward5.disabled=!canSeek;
+    if(canSeek) {
       seek.value=Math.round(100*audio.currentTime/audio.duration);
+    } else {
+      seek.value=0;
     }
   }
   play.onclick=()=> {
@@ -85,6 +94,13 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
       'Unable to play the recording. Please check your connection or reload the page.','error'));
     else audio.pause();
   };
+  function skipBy(seconds) {
+    if(!Number.isFinite(audio.duration)||audio.duration<=0)return;
+    audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+seconds));
+    updatePlayer();
+  }
+  back5.onclick=()=>skipBy(-5);
+  forward5.onclick=()=>skipBy(5);
   seek.oninput=()=> {
     if(Number.isFinite(audio.duration)&&audio.duration>0)
       audio.currentTime=audio.duration*Number(seek.value)/100;
@@ -94,7 +110,7 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
     audio.playbackRate=speeds[speedIndex];
     $('speed').textContent=speeds[speedIndex]+'× speed';
   };
-  ['timeupdate','loadedmetadata','play','pause','ended'].forEach(event=>
+  ['timeupdate','loadedmetadata','durationchange','emptied','play','pause','ended'].forEach(event=>
     audio.addEventListener(event,updatePlayer));
 
   async function checkForEdition() {
@@ -127,6 +143,7 @@ hr{border:0;border-top:1px solid #dbe0d6;margin:30px 0}details{border-bottom:1px
 
       // Don't interrupt ongoing playback if nothing new has appeared.
       if(version!==loadedVersion) {
+        back5.disabled=forward5.disabled=true;
         audio.src='./'+briefing.audio+'?version='+encodeURIComponent(version);
         loadedVersion=version;
       }
