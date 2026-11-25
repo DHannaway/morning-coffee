@@ -317,8 +317,14 @@ def build_script(client: OpenAI, now: datetime, weather: dict | None,
         f"Good morning. It's {date_text}, and welcome to your Morning Coffee. "
         + weather_opening(weather)
     )
-    news_target = target_words - len(opening.split())
-    news_cap = max_words - len(opening.split())
+    # Reserve a short, reliable closing outside model revisions and trimming.
+    closing = (
+        "And that's your Morning Coffee for today. "
+        "Thanks for listening, and have a lovely day."
+    )
+    reserved_words = len(opening.split()) + len(closing.split())
+    news_target = target_words - reserved_words
+    news_cap = max_words - reserved_words
     topics = settings["topics"]
     prompt = {
         "local_date": date_text,
@@ -339,11 +345,12 @@ def build_script(client: OpenAI, now: datetime, weather: dict | None,
     rules = f"""You are an exacting British radio news editor producing an informative,
 pleasant-to-listen-to morning bulletin for a person living in EDINBURGH, SCOTLAND.
 Return ONLY valid JSON with fields {{"script":"...", "source_ids":[1,3]}}.
-The greeting and local weather update are supplied separately, outside your
-script. Write approximately {news_target} spoken words of NEWS only, and NEVER
-exceed {news_cap} words. The total finished audio, including the weather
-opening, must fit into {minutes} minutes.
+The greeting, local weather update and closing sign-off are supplied separately,
+outside your script. Write approximately {news_target} spoken words of NEWS only,
+and NEVER exceed {news_cap} words. The total finished audio, including the weather
+opening and closing, must fit into {minutes} minutes.
 Do not repeat the greeting, weekday, date or weather in your text.
+End the final story with a complete thought; do not add your own sign-off.
 Start with the most important verified news story, in natural British English.
 The news narration is NOT a long-form podcast. Word limits are strict.
 If the verified evidence cannot sustain the target, WRITE A SHORTER SCRIPT.
@@ -393,8 +400,8 @@ CRITICAL RULES FOR NEWS ACCURACY
   invent stories merely to hit a quota. Prioritise important developments
   across Scotland, the UK, the world and AI over extended commentary.
 - Give each story a concise broadcast summary, not a full article recital.
-  Weather is already handled before your narration. Keep transitions and
-  the sign-off short. Give more context only to the most consequential items.
+  Weather is already handled before your narration and a sign-off follows it.
+  Keep transitions short. Give more context only to the most consequential items.
   Write for a single listener in a relaxed, natural, conversational voice,
   not a formal essay. Avoid lengthy history lessons and repeated conclusions.
   Context is not new reporting; distinguish the two explicitly.
@@ -455,6 +462,8 @@ CRITICAL RULES FOR NEWS ACCURACY
                 "repetition, rhetorical flourishes and long introductions. "
                 "Keep two or three concrete verified details per story. "
                 "Do not invent or add ANY new facts, numbers, dates or citations. "
+                "End the last story with a complete thought; a separate sign-off "
+                "will follow. Do not add a sign-off. "
                 "Plain spoken prose only, no headings, Markdown or URLs."
             ),
             input=json.dumps(
@@ -470,13 +479,13 @@ CRITICAL RULES FOR NEWS ACCURACY
     if len(best_draft.split()) < len(script.split()):
         script = best_draft
     script = keep_script_within_limit(script.strip(), news_cap)
-    script = opening + "\n\n" + script
+    script = opening + "\n\n" + script + "\n\n" + closing
     if len(script.split()) > max_words:
         raise ValueError(
             f"Briefing exceeded the {minutes}-minute limit after editing: "
             f"{len(script.split())} words (maximum {max_words})"
         )
-    if len(script.split()) < max(300, int(target_words * 0.45)):
+    if len(script.split()) - len(closing.split()) < max(300, int(target_words * 0.45)):
         raise ValueError(f"Insufficient supported news for a full briefing: {len(script.split())} words")
     if re.search(r"\bcloser to home\b", script, flags=re.I):
         raise ValueError("Geography quality check: invalid 'closer to home' transition")
